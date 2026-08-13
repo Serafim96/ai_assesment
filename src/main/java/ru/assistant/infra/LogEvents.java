@@ -19,8 +19,4 @@ public class LogEvents {
         String hash = Sha256.hex(text);
         return "len=" + text.length() + " sha256=" + hash.substring(0, 12);
     }
-
-    static String sha256Hex(String text) {
-        return Sha256.hex(text);
-    }
 }
