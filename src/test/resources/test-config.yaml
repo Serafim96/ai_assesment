@@ -1,0 +1,16 @@
+llm:
+  endpoint: "https://api.example.com/v1/chat/completions"
+  model: "test-model"
+  apiKeyEnv: "TEST_LLM_API_KEY"
+  timeoutMs: 5000
+
+agent:
+  maxSteps: 4
+
+store:
+  path: "./test-data"
+
+mail:
+  pollSeconds: 15
+  profile: "TestProfile"
+  folder: "TestInbox"
