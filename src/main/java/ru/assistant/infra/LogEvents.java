@@ -19,4 +19,19 @@ public class LogEvents {
         String hash = Sha256.hex(text);
         return "len=" + text.length() + " sha256=" + hash.substring(0, 12);
     }
+
+    public static String jsonEscape(String text) {
+        if (text == null) {
+            return "";
+        }
+        StringBuilder sb = new StringBuilder(text.length());
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '"' || c == '\\') {
+                sb.append('\\');
+            }
+            sb.append(c);
+        }
+        return sb.toString();
+    }
 }
