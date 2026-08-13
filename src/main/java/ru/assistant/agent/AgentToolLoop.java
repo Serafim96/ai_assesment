@@ -2,6 +2,8 @@ package ru.assistant.agent;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import ru.assistant.infra.AuditLog;
+import ru.assistant.infra.LogEvents;
 import ru.assistant.llm.ChatMessage;
 import ru.assistant.llm.ChatResponse;
 import ru.assistant.llm.LlmClient;
@@ -22,12 +24,18 @@ public class AgentToolLoop {
     private final LlmClient llmClient;
     private final ToolRegistry toolRegistry;
     private final int maxSteps;
+    private final AuditLog auditLog;
     private final ObjectMapper mapper = new ObjectMapper();
 
     public AgentToolLoop(LlmClient llmClient, ToolRegistry toolRegistry, int maxSteps) {
+        this(llmClient, toolRegistry, maxSteps, null);
+    }
+
+    public AgentToolLoop(LlmClient llmClient, ToolRegistry toolRegistry, int maxSteps, AuditLog auditLog) {
         this.llmClient = llmClient;
         this.toolRegistry = toolRegistry;
         this.maxSteps = maxSteps;
+        this.auditLog = auditLog;
     }
 
     public String run(String userMessage) throws LlmException {
@@ -49,10 +57,14 @@ public class AgentToolLoop {
             }
         }
 
+        appendAudit(LogEvents.AGENT_MAXSTEPS_EXCEEDED, "{\"maxSteps\":" + maxSteps + "}");
         return "Reached the maximum number of steps without a final answer.";
     }
 
     private String executeToolCall(ToolCall call) {
+        appendAudit(LogEvents.AGENT_TOOL_CALL, "{\"tool\":\"" + LogEvents.jsonEscape(call.getName())
+                + "\",\"args\":\"" + LogEvents.safePreview(call.getArgumentsJson()) + "\"}");
+
         Optional<Tool> tool = toolRegistry.get(call.getName());
         if (!tool.isPresent()) {
             return "Error: unknown tool '" + call.getName() + "'";
@@ -69,6 +81,12 @@ public class AgentToolLoop {
             return tool.get().execute(args);
         } catch (ToolError e) {
             return "Error: " + e.getMessage();
+        }
+    }
+
+    private void appendAudit(String eventKey, String detailsJson) {
+        if (auditLog != null) {
+            auditLog.append(eventKey, detailsJson);
         }
     }
 
