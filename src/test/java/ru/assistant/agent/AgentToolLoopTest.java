@@ -1,6 +1,10 @@
 package ru.assistant.agent;
 
+import org.junit.Rule;
 import org.junit.Test;
+import org.junit.rules.TemporaryFolder;
+import ru.assistant.infra.AuditLog;
+import ru.assistant.infra.LogEvents;
 import ru.assistant.llm.ChatResponse;
 import ru.assistant.llm.MockLlmClient;
 import ru.assistant.llm.ToolCall;
@@ -9,17 +13,24 @@ import ru.assistant.tools.Tool;
 import ru.assistant.tools.ToolError;
 import ru.assistant.tools.ToolRegistry;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertTrue;
 
 public class AgentToolLoopTest {
+
+    @Rule
+    public TemporaryFolder tmp = new TemporaryFolder();
 
     private static final Clock FIXED_CLOCK =
             Clock.fixed(Instant.parse("2026-08-13T10:00:00Z"), ZoneOffset.UTC);
@@ -106,6 +117,52 @@ public class AgentToolLoopTest {
         String result = loop.run("trigger a tool failure");
 
         assertEquals("Recovered from tool failure", result);
+    }
+
+    @Test
+    public void toolCallIsRecordedInAuditLogWhenAuditLogProvided() throws Exception {
+        ToolRegistry registry = new ToolRegistry(Arrays.asList((Tool) new CurrentDatetimeTool(FIXED_CLOCK)));
+        MockLlmClient llm = new MockLlmClient(Arrays.asList(
+                new ChatResponse(null, Arrays.asList(new ToolCall("call1", "current_datetime", "{}")), "tool_calls"),
+                new ChatResponse("The current time is 2026-08-13T10:00:00Z", null, "stop")
+        ));
+        AuditLog auditLog = new AuditLog(auditFile());
+        AgentToolLoop loop = new AgentToolLoop(llm, registry, 5, auditLog);
+
+        loop.run("What time is it?");
+
+        assertTrue(auditLog.verify());
+        List<String> lines = Files.readAllLines(auditFile(), StandardCharsets.UTF_8);
+        assertTrue(containsEventKey(lines, LogEvents.AGENT_TOOL_CALL));
+    }
+
+    @Test
+    public void maxStepsExceededIsRecordedInAuditLogWhenAuditLogProvided() throws Exception {
+        ToolRegistry registry = new ToolRegistry(Arrays.asList((Tool) new AlwaysOkTool()));
+        MockLlmClient llm = new MockLlmClient(Arrays.asList(
+                new ChatResponse(null, Arrays.asList(new ToolCall("c1", "always_ok", "{}")), "tool_calls"),
+                new ChatResponse(null, Arrays.asList(new ToolCall("c2", "always_ok", "{}")), "tool_calls")
+        ));
+        AuditLog auditLog = new AuditLog(auditFile());
+        AgentToolLoop loop = new AgentToolLoop(llm, registry, 2, auditLog);
+
+        loop.run("keep going forever");
+
+        List<String> lines = Files.readAllLines(auditFile(), StandardCharsets.UTF_8);
+        assertTrue(containsEventKey(lines, LogEvents.AGENT_MAXSTEPS_EXCEEDED));
+    }
+
+    private Path auditFile() {
+        return tmp.getRoot().toPath().resolve("audit.jsonl");
+    }
+
+    private boolean containsEventKey(List<String> lines, String eventKey) {
+        for (String line : lines) {
+            if (line.contains("\"eventKey\":\"" + eventKey + "\"")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static class AlwaysOkTool implements Tool {
