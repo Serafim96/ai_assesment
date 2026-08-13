@@ -50,4 +50,14 @@ public class LogEventsTest {
         assertEquals("mail_channel_error", LogEvents.MAIL_CHANNEL_ERROR);
         assertEquals("agent_maxsteps_exceeded", LogEvents.AGENT_MAXSTEPS_EXCEEDED);
     }
+
+    @Test
+    public void jsonEscapeEscapesQuotesAndBackslashes() {
+        assertEquals("say \\\"hi\\\" \\\\ ok", LogEvents.jsonEscape("say \"hi\" \\ ok"));
+    }
+
+    @Test
+    public void jsonEscapeOfNullReturnsEmptyString() {
+        assertEquals("", LogEvents.jsonEscape(null));
+    }
 }
