@@ -1,0 +1,3 @@
+llm:
+  endpoint: "https://api.example.com/v1/chat/completions"
+  model: "test-model"

@@ -7,6 +7,9 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertFalse;
+import static org.junit.Assert.assertTrue;
+import static org.junit.Assert.fail;
 
 public class ConfigLoaderTest {
 
@@ -30,5 +33,31 @@ public class ConfigLoaderTest {
         assertEquals(15, config.getMail().getPollSeconds());
         assertEquals("TestProfile", config.getMail().getProfile());
         assertEquals("TestInbox", config.getMail().getFolder());
+    }
+
+    @Test
+    public void brokenYamlThrowsConfigExceptionWithoutLeakingRawContent() throws Exception {
+        try {
+            ConfigLoader.load(fixture("broken-config.yaml"));
+            fail("Expected ConfigException for malformed YAML");
+        } catch (ConfigException e) {
+            assertTrue(e.getMessage().contains("broken-config.yaml"));
+            assertFalse(e.getMessage().contains("not valid yaml"));
+        }
+    }
+
+    @Test
+    public void incompleteConfigThrowsConfigExceptionNamingMissingField() throws Exception {
+        try {
+            ConfigLoader.load(fixture("incomplete-config.yaml"));
+            fail("Expected ConfigException for missing required fields");
+        } catch (ConfigException e) {
+            assertTrue(e.getMessage().contains("agent"));
+        }
+    }
+
+    @Test(expected = ConfigException.class)
+    public void missingFileThrowsConfigException() {
+        ConfigLoader.load(Paths.get("does-not-exist.yaml"));
     }
 }
