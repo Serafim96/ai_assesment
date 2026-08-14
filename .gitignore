@@ -5,3 +5,5 @@ target/
 .idea/
 .vscode/
 *.log
+data/
+dependency-reduced-pom.xml
